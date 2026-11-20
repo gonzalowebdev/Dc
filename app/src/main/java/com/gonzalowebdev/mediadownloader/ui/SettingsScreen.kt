@@ -44,26 +44,40 @@ fun SettingsScreen(vm: MainViewModel) {
         SectionCard {
             Text("Cuentas conectadas", fontWeight = FontWeight.SemiBold)
             AccountRow(Platform.PINTEREST, if (s.pinterestConnected) "Conectada" else "Desconectada", s.pinterestConnected)
+            Text(
+                "Los tableros y Pines públicos funcionan sin cuenta. Conectar es opcional y solo sirve para tus tableros secretos.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (s.pinterestConnected) {
                     OutlinedButton(onClick = { vm.disconnectPinterest() }) { Text("DESCONECTAR") }
                 } else {
                     Button(onClick = { vm.connectPinterest(ctx) }) { Text("CONECTAR") }
                 }
-                OutlinedButton(onClick = { showConfig = true }) { Text("CONFIGURAR API") }
+                OutlinedButton(onClick = { showConfig = true }) { Text("AVANZADO") }
             }
             HorizontalLine()
             AccountRow(Platform.INSTAGRAM, "Desconectada", false)
             Text(
-                "Instagram no ofrece OAuth para descargar contenido: solo se intentan publicaciones públicas sin iniciar sesión.",
+                "Funciona con yt-dlp sin iniciar sesión. Si Instagram exige sesión para un contenido, no se puede descargar. Las Stories no están soportadas.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             HorizontalLine()
             AccountRow(Platform.TIKTOK, "Desconectada", false)
             Text(
-                "TikTok no ofrece OAuth para descargar videos de terceros: solo se intenta contenido público.",
+                "Funciona con yt-dlp sin iniciar sesión, solo con contenido público.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+
+        SectionCard {
+            Text("Motor de descargas", fontWeight = FontWeight.SemiBold)
+            Text(vm.ytdlpInfo, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "yt-dlp se actualiza solo una vez por día. Si Instagram o TikTok dejan de funcionar, actualízalo acá.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedButton(onClick = { vm.updateYtDlp() }, enabled = !vm.ytdlpBusy) { Text("ACTUALIZAR YT-DLP") }
         }
 
         SectionCard {
@@ -77,7 +91,7 @@ fun SettingsScreen(vm: MainViewModel) {
 
         SectionCard {
             Text("Información", fontWeight = FontWeight.SemiBold)
-            Text("Media Downloader Hub 1.0.0", style = MaterialTheme.typography.bodyMedium)
+            Text("Media Downloader Hub 1.1.0", style = MaterialTheme.typography.bodyMedium)
             Text(
                 "Uso personal. Respeta los términos de cada plataforma y los derechos de autor. No se almacenan contraseñas; los tokens se guardan cifrados.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -131,7 +145,7 @@ private fun PinterestConfigDialog(vm: MainViewModel, onClose: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("API de Pinterest") },
+        title = { Text("Pinterest (avanzado, opcional)") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Datos de tu app en developers.pinterest.com. Registra el redirect URI exactamente como aparece abajo.", style = MaterialTheme.typography.bodySmall)

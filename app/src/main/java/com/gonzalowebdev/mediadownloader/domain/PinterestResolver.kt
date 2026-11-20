@@ -29,7 +29,14 @@ class PinterestResolver(private val api: PinterestApi, private val auth: Pintere
         val notes = mutableListOf<String>()
         var entries: List<MediaEntry> = emptyList()
         var title = "Pin $id"
-        if (auth.hasToken()) {
+        progress("Leyendo el Pin…")
+        try {
+            val pin = PinterestPublic.pin(id)
+            entries = PinterestPublic.pinToEntries(pin)
+            (pin.str("title")?.takeIf { it.isNotBlank() } ?: pin.str("grid_title")?.takeIf { it.isNotBlank() })
+                ?.let { title = it }
+        } catch (e: ResolveException) { /* se prueba con otras vías */ }
+        if (entries.isEmpty() && auth.hasToken()) {
             progress("Consultando la API de Pinterest…")
             try {
                 val pin = api.get("/v5/pins/$id")
@@ -40,16 +47,80 @@ class PinterestResolver(private val api: PinterestApi, private val auth: Pintere
             }
         }
         if (entries.isEmpty()) {
-            progress("Leyendo la página pública del Pin…")
+            progress("Leyendo la página del Pin…")
             entries = PinterestScraper.entriesFor(id)
         }
         return Resolved(Platform.PINTEREST, LinkType.PIN, orig.url, title, entries, entries.firstOrNull()?.previewUrl, notes)
     }
 
     private suspend fun resolveBoard(orig: ParsedLink, link: ParsedLink, progress: (String) -> Unit): Resolved {
-        if (!auth.hasToken()) {
-            throw ResolveException("Para descargar tableros debes conectar tu cuenta de Pinterest (Ajustes → Cuentas conectadas).")
+        progress("Leyendo el tablero (sin iniciar sesión)…")
+        try {
+            return resolveBoardPublic(orig, link, progress)
+        } catch (e: ResolveException) {
+            if (!auth.hasToken()) {
+                throw ResolveException(
+                    "${e.message}\n\nSi es un tablero secreto tuyo, conecta tu cuenta en Ajustes → Pinterest (avanzado)."
+                )
+            }
+            progress("Probando con tu cuenta conectada…")
+            return resolveBoardApi(orig, link, progress)
         }
+    }
+
+    private suspend fun resolveBoardPublic(orig: ParsedLink, link: ParsedLink, progress: (String) -> Unit): Resolved {
+        val user = link.ids.getOrNull(0).orEmpty()
+        val slug = link.ids.getOrNull(1).orEmpty()
+        val sectionName = link.ids.getOrNull(2)?.let { URLDecoder.decode(it, "UTF-8") }
+        val notes = mutableListOf<String>()
+
+        val board = PinterestPublic.board(user, slug)
+        val boardId = board.str("id") ?: throw ResolveException("El tablero no devolvió un identificador.")
+        val boardName = board.str("name") ?: URLDecoder.decode(slug, "UTF-8")
+        val declared = board.get("pin_count")?.takeIf { it.isJsonPrimitive }?.asInt
+
+        val pins = LinkedHashMap<String, JsonObject>()
+        if (link.type == LinkType.BOARD) {
+            PinterestPublic.boardPins(user, slug, boardId) { progress("Recuperando Pines… $it") }
+                .forEach { p -> p.str("id")?.let { pins[it] = p } }
+        }
+
+        progress("Buscando secciones…")
+        val sections = try {
+            PinterestPublic.sections(user, slug, boardId)
+        } catch (e: ResolveException) {
+            notes += "No pude leer las secciones: ${e.message}"
+            emptyList()
+        }
+        val wanted = if (link.type == LinkType.BOARD_SECTION && sectionName != null)
+            sections.filter { norm(it.str("title") ?: it.str("name") ?: "") == norm(sectionName) }
+        else sections
+        if (link.type == LinkType.BOARD_SECTION && wanted.isEmpty())
+            throw ResolveException("No encontré la sección «$sectionName» en ese tablero.")
+        for (s in wanted) {
+            val sid = s.str("id") ?: continue
+            val sname = s.str("title") ?: s.str("name").orEmpty()
+            PinterestPublic.sectionPins(user, slug, sid) { progress("Sección «$sname»… ${pins.size + it} Pines") }
+                .forEach { p -> p.str("id")?.let { pins[it] = p } }
+        }
+        if (sections.isNotEmpty() && link.type == LinkType.BOARD) notes += "El tablero tiene ${sections.size} secciones; sus Pines están incluidos."
+
+        val entries = ArrayList<MediaEntry>()
+        var withoutMedia = 0
+        for (p in pins.values) {
+            val e = PinterestPublic.pinToEntries(p)
+            if (e.isEmpty()) withoutMedia++ else entries += e
+        }
+        if (withoutMedia > 0) notes += "$withoutMedia Pines no tienen imagen/video accesible y no se incluyen."
+        if (declared != null && link.type == LinkType.BOARD && declared > pins.size)
+            notes += "Pinterest declara $declared Pines y se recuperaron ${pins.size}."
+        if (entries.isEmpty()) throw ResolveException("No pude leer Pines de ese tablero sin iniciar sesión.")
+
+        val title = if (link.type == LinkType.BOARD_SECTION) "$boardName · $sectionName" else boardName
+        return Resolved(Platform.PINTEREST, link.type, orig.url, title, entries.distinctBy { it.key }, entries.firstOrNull()?.previewUrl, notes)
+    }
+
+    private suspend fun resolveBoardApi(orig: ParsedLink, link: ParsedLink, progress: (String) -> Unit): Resolved {
         val user = link.ids.getOrNull(0).orEmpty()
         val slug = URLDecoder.decode(link.ids.getOrNull(1).orEmpty(), "UTF-8")
         val notes = mutableListOf<String>()

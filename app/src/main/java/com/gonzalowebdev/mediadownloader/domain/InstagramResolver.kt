@@ -11,8 +11,8 @@ object InstagramResolver {
     suspend fun resolve(link: ParsedLink): Resolved {
         if (link.type == LinkType.STORY) {
             throw ResolveException(
-                "Las Stories de Instagram requieren iniciar sesión y Instagram no ofrece OAuth para descargarlas. " +
-                    "Esta función no está disponible (ver README → Limitaciones)."
+                "Las Stories de Instagram no están soportadas: exigen iniciar sesión y esta app no pide contraseñas. " +
+                    "Puedes descargar publicaciones, carruseles y reels públicos."
             )
         }
         val code = link.ids.firstOrNull() ?: throw ResolveException("No pude identificar la publicación de Instagram.")

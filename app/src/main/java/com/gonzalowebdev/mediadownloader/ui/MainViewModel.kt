@@ -18,6 +18,7 @@ import com.gonzalowebdev.mediadownloader.domain.LinkType
 import com.gonzalowebdev.mediadownloader.domain.ParsedLink
 import com.gonzalowebdev.mediadownloader.domain.ResolveException
 import com.gonzalowebdev.mediadownloader.domain.Resolved
+import com.gonzalowebdev.mediadownloader.net.YtDlp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -57,6 +58,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var message by mutableStateOf<String?>(null)
     var clipboardSuggestion by mutableStateOf<String?>(null)
     var settings by mutableStateOf(readSettings())
+    var ytdlpInfo by mutableStateOf("Iniciando motor de descargas…")
+    var ytdlpBusy by mutableStateOf(false)
     private var job: Job? = null
 
     val jobs: StateFlow<List<JobStats>> =
@@ -78,6 +81,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     private fun refreshSettings() { settings = readSettings() }
+
+    init { refreshYtdlp() }
+
+    fun refreshYtdlp() {
+        viewModelScope.launch(Dispatchers.IO) {
+            ytdlpInfo = try { "yt-dlp ${YtDlp.version(a)}" } catch (e: Exception) { "yt-dlp no disponible: ${e.message}" }
+        }
+    }
+
+    fun updateYtDlp() {
+        if (ytdlpBusy) return
+        ytdlpBusy = true
+        message = "Actualizando yt-dlp…"
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val r = YtDlp.update(a)
+                a.prefs.ytdlpLastUpdate = System.currentTimeMillis()
+                message = "yt-dlp: $r"
+            } catch (e: Exception) {
+                message = "No se pudo actualizar yt-dlp: ${e.message}"
+            }
+            ytdlpBusy = false
+            refreshYtdlp()
+        }
+    }
 
     // ---------- Enlaces ----------
     fun onInputChanged(s: String) {

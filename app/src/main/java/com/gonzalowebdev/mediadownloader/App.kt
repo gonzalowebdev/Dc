@@ -11,6 +11,7 @@ import com.gonzalowebdev.mediadownloader.download.Notifs
 import com.gonzalowebdev.mediadownloader.download.Repo
 import com.gonzalowebdev.mediadownloader.net.PinterestApi
 import com.gonzalowebdev.mediadownloader.net.PinterestAuth
+import com.gonzalowebdev.mediadownloader.net.YtDlp
 
 class App : Application() {
     lateinit var prefs: Prefs
@@ -27,9 +28,20 @@ class App : Application() {
         db = Room.databaseBuilder(this, AppDatabase::class.java, "mdh.db").build()
         auth = PinterestAuth(prefs)
         api = PinterestApi(auth)
-        resolver = Resolver(PinterestResolver(api, auth))
+        resolver = Resolver(this, PinterestResolver(api, auth))
         saver = MediaStoreSaver(this)
         repo = Repo(this)
         Notifs.createChannels(this)
+        // Inicia yt-dlp en segundo plano y lo actualiza como máximo una vez por día.
+        kotlin.concurrent.thread(name = "ytdlp-init") {
+            try {
+                YtDlp.ensure(this)
+                val now = System.currentTimeMillis()
+                if (now - prefs.ytdlpLastUpdate > 24L * 3600 * 1000) {
+                    YtDlp.update(this)
+                    prefs.ytdlpLastUpdate = now
+                }
+            } catch (e: Exception) { /* se informa al usar la descarga */ }
+        }
     }
 }

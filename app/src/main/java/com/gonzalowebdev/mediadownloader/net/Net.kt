@@ -6,6 +6,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.CopyOnWriteArrayList
@@ -32,12 +33,17 @@ object Net {
     const val UA_DESKTOP =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
+    private val jar = MemoryCookieJar()
+
     val client: OkHttpClient = OkHttpClient.Builder()
-        .cookieJar(MemoryCookieJar())
+        .cookieJar(jar)
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(40, TimeUnit.SECONDS)
         .followRedirects(true)
         .build()
+
+    fun cookie(url: String, name: String): String? =
+        jar.loadForRequest(url.toHttpUrl()).firstOrNull { it.name == name }?.value
 
     suspend fun getString(url: String, headers: Map<String, String> = emptyMap()): String =
         withContext(Dispatchers.IO) {

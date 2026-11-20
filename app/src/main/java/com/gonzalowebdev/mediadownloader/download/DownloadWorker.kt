@@ -1,6 +1,11 @@
 package com.gonzalowebdev.mediadownloader.download
 
 import android.content.Context
+import com.gonzalowebdev.mediadownloader.net.YtDlp
+import com.yausername.youtubedl_android.YoutubeDL
+import com.yausername.youtubedl_android.YoutubeDLRequest
+import kotlinx.coroutines.runBlocking
+import java.io.File
 import android.net.Uri
 import android.os.SystemClock
 import androidx.work.CoroutineWorker
@@ -95,7 +100,10 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
         val platform = Platform.valueOf(item.platform)
         var uri: Uri? = null
         try {
-            val urls = item.urls.split("\n").filter { it.isNotBlank() }
+            val all = item.urls.split("\n").filter { it.isNotBlank() }
+            val ytSpec = all.firstOrNull { it.startsWith("ytdlp:") }
+            val urls = all.filter { !it.startsWith("ytdlp:") }
+            if (urls.isEmpty() && ytSpec != null) { processYtDlp(item, dao, ytSpec); return }
             var chosen: String? = null
             var chosenMime: String? = null
             var lastErr = "sin dirección"
@@ -109,7 +117,10 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
                     if (p.ok) { chosen = c; chosenMime = p.mime; break@outer } else lastErr = p.error
                 }
             }
-            if (chosen == null) { fail(item, dao, "Archivo no disponible ($lastErr)"); return }
+            if (chosen == null) {
+                if (ytSpec != null) { processYtDlp(item, dao, ytSpec); return }
+                fail(item, dao, "Archivo no disponible ($lastErr)"); return
+            }
 
             Net.client.newCall(requestFor(chosen, item.platform).build()).execute().use { resp ->
                 if (!resp.isSuccessful) { fail(item, dao, "El servidor respondió HTTP ${resp.code}"); return }
@@ -157,6 +168,82 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
         } catch (e: Exception) {
             uri?.let { saver.abort(it) }
             fail(item, dao, humanError(e))
+        }
+    }
+
+    /** Descarga con yt-dlp a una carpeta temporal y luego copia el archivo a MediaStore. */
+    private suspend fun processYtDlp(item: ItemEntity, dao: AppDao, spec: String) {
+        val saver = app.saver
+        val platform = Platform.valueOf(item.platform)
+        val body = spec.removePrefix("ytdlp:")
+        val idx = body.substringBefore(':').toIntOrNull() ?: 0
+        val url = body.substringAfter(':')
+        val pid = "ytdlp-${item.id}"
+        val dir = File(applicationContext.cacheDir, "ytdlp/${item.id}")
+        dir.deleteRecursively()
+        dir.mkdirs()
+        var uri: Uri? = null
+        var paused = false
+        try {
+            YtDlp.ensure(applicationContext)
+            val req = YoutubeDLRequest(url)
+            req.addOption("-o", "${dir.absolutePath}/%(id)s.%(ext)s")
+            req.addOption("-f", "b[ext=mp4]/bv*[ext=mp4]+ba[ext=m4a]/b/bv*+ba")
+            req.addOption("--merge-output-format", "mp4")
+            if (idx > 0) req.addOption("--playlist-items", idx.toString()) else req.addOption("--no-playlist")
+            req.addOption("--no-mtime")
+            req.addOption("--no-part")
+            req.addOption("--retries", "3")
+            req.addOption("--socket-timeout", "30")
+            var lastCheck = 0L
+            withContext(Dispatchers.IO) {
+                try {
+                    YoutubeDL.getInstance().execute(req, pid) { progress, _, _ ->
+                        val now = SystemClock.elapsedRealtime()
+                        if (now - lastCheck > 800) {
+                            lastCheck = now
+                            val st = runBlocking { dao.statusOf(item.id) }
+                            if (st != Status.DOWNLOADING) {
+                                paused = true
+                                YoutubeDL.getInstance().destroyProcessById(pid)
+                            } else if (isStopped) {
+                                YoutubeDL.getInstance().destroyProcessById(pid)
+                            } else {
+                                runBlocking { dao.progress(item.id, progress.toLong(), 100L) }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    if (paused) throw PausedException()
+                    if (isStopped) throw CancellationException("Trabajo detenido")
+                    throw e
+                }
+            }
+            currentCoroutineContext().ensureActive()
+            val produced = dir.listFiles()?.filter { it.isFile && !it.name.endsWith(".part") && !it.name.endsWith(".ytdl") }
+                ?.maxByOrNull { it.length() }
+            if (produced == null || produced.length() == 0L) throw IOException("yt-dlp no generó ningún archivo")
+            val base = item.fileName.substringBeforeLast('.', item.fileName)
+            val name = saver.uniqueName(platform, "$base.${produced.extension.ifBlank { "mp4" }}")
+            val mime = guessMime(name)
+            val target = saver.create(platform, name, mime)
+            uri = target
+            saver.output(target).use { out -> produced.inputStream().use { it.copyTo(out) } }
+            saver.finish(target)
+            dao.markDone(item.id, target.toString(), name, produced.length(), System.currentTimeMillis())
+            doneRun.incrementAndGet()
+            notifyProgress(dao)
+        } catch (e: PausedException) {
+            uri?.let { saver.abort(it) }
+        } catch (e: CancellationException) {
+            uri?.let { saver.abort(it) }
+            withContext(NonCancellable) { dao.setStatus(item.id, Status.PENDING) }
+            throw e
+        } catch (e: Exception) {
+            uri?.let { saver.abort(it) }
+            fail(item, dao, YtDlp.friendly(e.message))
+        } finally {
+            dir.deleteRecursively()
         }
     }
 

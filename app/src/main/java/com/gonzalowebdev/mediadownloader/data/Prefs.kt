@@ -61,6 +61,10 @@ class Prefs(ctx: Context) {
         get() = secure.getLong("tokenExpiresAt", 0L)
         set(v) = secure.edit().putLong("tokenExpiresAt", v).apply()
 
+    var ytdlpLastUpdate: Long
+        get() = sp.getLong("ytdlpLastUpdate", 0L)
+        set(v) = sp.edit().putLong("ytdlpLastUpdate", v).apply()
+
     fun clearPinterestTokens() {
         secure.edit().remove("accessToken").remove("refreshToken").remove("tokenExpiresAt").apply()
     }
