@@ -1,5 +1,8 @@
 package com.gonzalowebdev.mediadownloader.ui
 
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -22,12 +25,44 @@ fun SettingsScreen(vm: MainViewModel) {
     val ctx = LocalContext.current
     val s = vm.settings
     var showConfig by remember { mutableStateOf(false) }
+    val loginLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { vm.onSessionChanged() }
+    fun login(p: Platform) = loginLauncher.launch(Intent(ctx, LoginActivity::class.java).putExtra("platform", p.name))
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text("Configuración", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+
+        SectionCard {
+            Text("Cuentas conectadas", fontWeight = FontWeight.SemiBold)
+            Text(
+                "Inicias sesión en la página real de cada red. La app no ve ni guarda tu contraseña: solo guarda la sesión, cifrada en tu teléfono.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            AccountBlock(
+                Platform.PINTEREST, Platform.PINTEREST.name in s.sessions,
+                "Necesaria para descargar tableros (incluidos los secretos) y secciones.",
+                { login(Platform.PINTEREST) }, { vm.logout(Platform.PINTEREST) }
+            )
+            OutlinedButton(onClick = { showConfig = true }) { Text("PINTEREST API (AVANZADO)") }
+            HorizontalLine()
+            AccountBlock(
+                Platform.INSTAGRAM, Platform.INSTAGRAM.name in s.sessions,
+                "Necesaria para publicaciones de imágenes, carruseles, reels y Stories.",
+                { login(Platform.INSTAGRAM) }, { vm.logout(Platform.INSTAGRAM) }
+            )
+            HorizontalLine()
+            AccountBlock(
+                Platform.TIKTOK, Platform.TIKTOK.name in s.sessions,
+                "Opcional: los videos públicos funcionan sin sesión.",
+                { login(Platform.TIKTOK) }, { vm.logout(Platform.TIKTOK) }
+            )
+            Text(
+                "Aviso: usar tu cuenta con herramientas automáticas puede llevar a que Instagram o TikTok limiten tu cuenta de forma temporal. Evita descargar cientos de elementos de golpe.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
 
         SectionCard {
             Text("Descargas", fontWeight = FontWeight.SemiBold)
@@ -39,35 +74,6 @@ fun SettingsScreen(vm: MainViewModel) {
                     FilterChip(selected = s.concurrency == n, onClick = { vm.setConcurrency(n) }, label = { Text("$n") })
                 }
             }
-        }
-
-        SectionCard {
-            Text("Cuentas conectadas", fontWeight = FontWeight.SemiBold)
-            AccountRow(Platform.PINTEREST, if (s.pinterestConnected) "Conectada" else "Desconectada", s.pinterestConnected)
-            Text(
-                "Los tableros y Pines públicos funcionan sin cuenta. Conectar es opcional y solo sirve para tus tableros secretos.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (s.pinterestConnected) {
-                    OutlinedButton(onClick = { vm.disconnectPinterest() }) { Text("DESCONECTAR") }
-                } else {
-                    Button(onClick = { vm.connectPinterest(ctx) }) { Text("CONECTAR") }
-                }
-                OutlinedButton(onClick = { showConfig = true }) { Text("AVANZADO") }
-            }
-            HorizontalLine()
-            AccountRow(Platform.INSTAGRAM, "Desconectada", false)
-            Text(
-                "Funciona con yt-dlp sin iniciar sesión. Si Instagram exige sesión para un contenido, no se puede descargar. Las Stories no están soportadas.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            HorizontalLine()
-            AccountRow(Platform.TIKTOK, "Desconectada", false)
-            Text(
-                "Funciona con yt-dlp sin iniciar sesión, solo con contenido público.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
 
         SectionCard {
@@ -91,9 +97,9 @@ fun SettingsScreen(vm: MainViewModel) {
 
         SectionCard {
             Text("Información", fontWeight = FontWeight.SemiBold)
-            Text("Media Downloader Hub 1.1.0", style = MaterialTheme.typography.bodyMedium)
+            Text("Media Downloader Hub 1.2.0", style = MaterialTheme.typography.bodyMedium)
             Text(
-                "Uso personal. Respeta los términos de cada plataforma y los derechos de autor. No se almacenan contraseñas; los tokens se guardan cifrados.",
+                "Uso personal. Respeta los términos de cada plataforma y los derechos de autor.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -103,8 +109,16 @@ fun SettingsScreen(vm: MainViewModel) {
 }
 
 @Composable
+private fun AccountBlock(p: Platform, connected: Boolean, hint: String, onLogin: () -> Unit, onLogout: () -> Unit) {
+    AccountRow(p, if (connected) "Sesión iniciada" else "Desconectada", connected)
+    Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    if (connected) OutlinedButton(onClick = onLogout) { Text("CERRAR SESIÓN") }
+    else Button(onClick = onLogin) { Text("INICIAR SESIÓN") }
+}
+
+@Composable
 private fun HorizontalLine() {
-    Box(Modifier.fillMaxWidth().height(1.dp).padding(vertical = 0.dp)) {
+    Box(Modifier.fillMaxWidth().height(1.dp)) {
         Surface(color = MaterialTheme.colorScheme.outline, modifier = Modifier.fillMaxSize()) {}
     }
 }
@@ -136,6 +150,7 @@ private fun AccountRow(p: Platform, status: String, connected: Boolean) {
 
 @Composable
 private fun PinterestConfigDialog(vm: MainViewModel, onClose: () -> Unit) {
+    val ctx = LocalContext.current
     val s = vm.settings
     var clientId by remember { mutableStateOf(s.clientId) }
     var secret by remember { mutableStateOf("") }
@@ -145,10 +160,13 @@ private fun PinterestConfigDialog(vm: MainViewModel, onClose: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("Pinterest (avanzado, opcional)") },
+        title = { Text("Pinterest API (avanzado, opcional)") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Datos de tu app en developers.pinterest.com. Registra el redirect URI exactamente como aparece abajo.", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "No hace falta para el uso normal: iniciar sesión en Pinterest alcanza. Esto es solo una vía alternativa con la API oficial (estado: ${if (s.pinterestConnected) "conectada" else "desconectada"}).",
+                    style = MaterialTheme.typography.bodySmall
+                )
                 OutlinedTextField(clientId, { clientId = it }, label = { Text("App ID") }, singleLine = true)
                 OutlinedTextField(
                     secret, { secret = it },
@@ -157,11 +175,18 @@ private fun PinterestConfigDialog(vm: MainViewModel, onClose: () -> Unit) {
                 )
                 OutlinedTextField(redirect, { redirect = it }, label = { Text("Redirect URI") }, singleLine = true)
                 SwitchRow("Usar API sandbox (acceso Trial)", null, sandbox) { sandbox = it }
-                Text("Alternativa: pegar un token de acceso generado en el panel de Pinterest.", style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(
                     token, { token = it }, label = { Text("Token de acceso (opcional)") },
                     singleLine = true, visualTransformation = PasswordVisualTransformation()
                 )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = {
+                        vm.savePinterestConfig(clientId, secret, redirect, sandbox)
+                        vm.connectPinterest(ctx)
+                        onClose()
+                    }) { Text("CONECTAR") }
+                    if (s.pinterestConnected) TextButton(onClick = { vm.disconnectPinterest(); onClose() }) { Text("DESCONECTAR") }
+                }
             }
         },
         confirmButton = {

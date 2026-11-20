@@ -26,13 +26,14 @@ object YtDlp {
         }
     }
 
-    suspend fun json(ctx: Context, url: String, noPlaylist: Boolean): JsonObject = withContext(Dispatchers.IO) {
+    suspend fun json(ctx: Context, url: String, noPlaylist: Boolean, cookies: java.io.File? = null): JsonObject = withContext(Dispatchers.IO) {
         ensure(ctx)
         val req = YoutubeDLRequest(url)
         req.addOption("--dump-single-json")
         req.addOption("--no-warnings")
         req.addOption("--socket-timeout", "25")
         if (noPlaylist) req.addOption("--no-playlist")
+        if (cookies != null) req.addOption("--cookies", cookies.absolutePath)
         val out = try {
             YoutubeDL.getInstance().execute(req).out
         } catch (e: Exception) {
@@ -59,8 +60,11 @@ object YtDlp {
 
     fun friendly(raw: String?): String {
         val msg = raw.orEmpty()
-        val err = msg.lines().lastOrNull { it.contains("ERROR", ignoreCase = true) }?.trim() ?: msg.trim().take(240)
+        val err = (msg.lines().lastOrNull { it.contains("ERROR", ignoreCase = true) }?.trim() ?: msg.trim().take(240))
+            .substringBefore("; please report").substringBefore(", filling out")
         return when {
+            err.contains("no video in this post", true) || err.contains("No video formats", true) ->
+                "yt-dlp no encontró un video en este enlace (puede ser una publicación de imágenes)."
             err.contains("login required", true) || err.contains("rate-limit", true) || err.contains("not available", true) && err.contains("Instagram", true) ->
                 "Instagram pide iniciar sesión (o limitó las consultas) para este contenido; sin cuenta no se puede descargar. ($err)"
             err.contains("Private", true) -> "El contenido es privado. ($err)"

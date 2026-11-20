@@ -59,7 +59,11 @@ object PinterestPublic {
             }
             if (code == 429 && attempt < 5) { attempt++; delay(4_000L * attempt); continue }
             if (code == 404) throw ResolveException("Pinterest no encontró el recurso (HTTP 404): es privado o no existe.")
-            if (code == 403 || code == 401) throw ResolveException("Pinterest bloqueó la lectura pública (HTTP $code).")
+            if (code == 403 || code == 401) throw ResolveException(
+                if (com.gonzalowebdev.mediadownloader.net.Sessions.has(Platform.PINTEREST))
+                    "Pinterest rechazó la sesión (HTTP $code). Cierra sesión y vuelve a iniciarla en Ajustes."
+                else "Pinterest bloqueó la lectura sin cuenta (HTTP $code)."
+            )
             if (code !in 200..299) throw ResolveException("Pinterest respondió HTTP $code.")
             val rr = try {
                 JsonParser.parseString(body).asJsonObject.obj("resource_response")

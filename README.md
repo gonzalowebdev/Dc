@@ -11,14 +11,21 @@ Compilar local: abrir en Android Studio (JDK 17) o `gradle assembleDebug`.
 - **Compartir → Media Downloader Hub** desde Instagram/TikTok/Pinterest.
 - **Pegar** el enlace en Inicio (también sugiere un enlace compatible del portapapeles al abrir la app).
 
-## Cómo descarga (v1.1)
+## Iniciar sesión (v1.2)
+En Ajustes → Cuentas conectadas puedes iniciar sesión en **Pinterest, Instagram y TikTok** dentro de la app (WebView con la página real de cada red). **La app nunca ve tu contraseña**: guarda solo las cookies de sesión, cifradas (AES-256), y las usa para las consultas y como `cookies.txt` temporal para yt-dlp.
+- **Pinterest**: necesario para tableros (también secretos) y secciones.
+- **Instagram**: necesario para imágenes, carruseles, reels y **Stories** (vía la API web con tu sesión).
+- **TikTok**: opcional.
+- Aviso: usar tu cuenta con herramientas automáticas puede hacer que la red limite tu cuenta temporalmente. "Continuar con Google" suele no funcionar dentro de un WebView: usa correo/usuario y contraseña.
+
+## Cómo descarga
 - **Instagram y TikTok**: usa **yt-dlp** (librería youtubedl-android + ffmpeg, se actualiza sola una vez por día y desde Ajustes → Motor de descargas). Si falla, intenta una lectura directa de la página pública.
 - **Pinterest, sin cuenta**: Pines y tableros públicos (con secciones y paginación completa de 250 en 250) se leen con los mismos endpoints JSON que usa la web. Videos: mp4 directo; si solo hay HLS, usa yt-dlp.
 - **Pinterest con cuenta (opcional, avanzado)**: solo para tableros secretos propios. Registrar el redirect `mediadownloaderhub://pinterest-callback` en una app de developers.pinterest.com, o pegar un token de acceso (Ajustes → Pinterest → Avanzado).
 - Cada archivo se verifica antes de descargarlo; un tablero solo se marca completo si no quedan pendientes ni fallidos; los fallidos se reintentan.
 
 ## Limitaciones (sin funciones ficticias)
-- **Stories de Instagram: no soportadas** (exigen sesión; la app no pide contraseñas).
+- Stories de Instagram: solo con sesión iniciada; las historias destacadas no están soportadas.
 - Instagram suele pedir sesión incluso para contenido público: en esos casos la app muestra el motivo y no se puede descargar sin cuenta.
 - Instagram, TikTok y Pinterest cambian sus sistemas seguido; si algo deja de funcionar, actualizar yt-dlp suele arreglarlo.
 - Pinterest puede limitar o bloquear la lectura pública (se reintenta con espera); en tableros enormes puede tardar.

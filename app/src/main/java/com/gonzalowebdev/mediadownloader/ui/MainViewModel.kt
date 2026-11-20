@@ -18,7 +18,9 @@ import com.gonzalowebdev.mediadownloader.domain.LinkType
 import com.gonzalowebdev.mediadownloader.domain.ParsedLink
 import com.gonzalowebdev.mediadownloader.domain.ResolveException
 import com.gonzalowebdev.mediadownloader.domain.Resolved
+import com.gonzalowebdev.mediadownloader.net.Sessions
 import com.gonzalowebdev.mediadownloader.net.YtDlp
+import com.gonzalowebdev.mediadownloader.domain.Platform
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -44,7 +46,8 @@ data class SettingsState(
     val clientId: String,
     val hasSecret: Boolean,
     val redirectUri: String,
-    val sandbox: Boolean
+    val sandbox: Boolean,
+    val sessions: Set<String>
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -77,10 +80,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         clientId = a.prefs.pinterestClientId.orEmpty(),
         hasSecret = !a.prefs.pinterestClientSecret.isNullOrBlank(),
         redirectUri = a.prefs.pinterestRedirectUri,
-        sandbox = a.prefs.pinterestSandbox
+        sandbox = a.prefs.pinterestSandbox,
+        sessions = Platform.values().filter { Sessions.has(it) }.map { it.name }.toSet()
     )
 
     private fun refreshSettings() { settings = readSettings() }
+
+    fun onSessionChanged() {
+        refreshSettings()
+        message = "Sesiones: " + (settings.sessions.joinToString(", ") { Platform.valueOf(it).label }.ifBlank { "ninguna" })
+    }
+
+    fun logout(p: Platform) {
+        Sessions.clear(p)
+        android.webkit.CookieManager.getInstance().removeAllCookies(null)
+        refreshSettings()
+        message = "Sesión de ${p.label} cerrada"
+    }
 
     init { refreshYtdlp() }
 

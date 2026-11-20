@@ -65,6 +65,13 @@ class Prefs(ctx: Context) {
         get() = sp.getLong("ytdlpLastUpdate", 0L)
         set(v) = sp.edit().putLong("ytdlpLastUpdate", v).apply()
 
+    fun getSession(platform: String): String? = secure.getString("session_$platform", null)
+
+    fun setSession(platform: String, value: String?) {
+        if (value == null) secure.edit().remove("session_$platform").apply()
+        else secure.edit().putString("session_$platform", value).apply()
+    }
+
     fun clearPinterestTokens() {
         secure.edit().remove("accessToken").remove("refreshToken").remove("tokenExpiresAt").apply()
     }

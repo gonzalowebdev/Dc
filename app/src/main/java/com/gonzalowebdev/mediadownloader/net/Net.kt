@@ -27,6 +27,10 @@ private class MemoryCookieJar : CookieJar {
         store.removeIf { it.expiresAt < now }
         return store.filter { it.matches(url) }
     }
+
+    fun removeDomain(d: String) {
+        store.removeIf { it.domain == d || it.domain.endsWith(".$d") }
+    }
 }
 
 object Net {
@@ -41,6 +45,17 @@ object Net {
         .readTimeout(40, TimeUnit.SECONDS)
         .followRedirects(true)
         .build()
+
+    fun seedCookies(domain: String, pairs: List<Pair<String, String>>) {
+        val exp = System.currentTimeMillis() + 365L * 24 * 3600 * 1000
+        val cookies = pairs.mapNotNull { (n, v) ->
+            try { Cookie.Builder().name(n).value(v).domain(domain).path("/").secure().expiresAt(exp).build() }
+            catch (e: Exception) { null }
+        }
+        jar.saveFromResponse(HttpUrl.Builder().scheme("https").host(domain).build(), cookies)
+    }
+
+    fun removeDomain(domain: String) = jar.removeDomain(domain)
 
     fun cookie(url: String, name: String): String? =
         jar.loadForRequest(url.toHttpUrl()).firstOrNull { it.name == name }?.value

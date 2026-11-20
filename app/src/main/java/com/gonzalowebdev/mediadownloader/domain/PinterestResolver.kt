@@ -59,9 +59,9 @@ class PinterestResolver(private val api: PinterestApi, private val auth: Pintere
             return resolveBoardPublic(orig, link, progress)
         } catch (e: ResolveException) {
             if (!auth.hasToken()) {
-                throw ResolveException(
-                    "${e.message}\n\nSi es un tablero secreto tuyo, conecta tu cuenta en Ajustes → Pinterest (avanzado)."
-                )
+                val hint = if (com.gonzalowebdev.mediadownloader.net.Sessions.has(Platform.PINTEREST)) ""
+                else "\n\nPara tableros inicia sesión en Pinterest: Ajustes → Cuentas conectadas → Pinterest."
+                throw ResolveException("${e.message}$hint")
             }
             progress("Probando con tu cuenta conectada…")
             return resolveBoardApi(orig, link, progress)

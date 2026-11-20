@@ -9,7 +9,10 @@ object YtDlpResolver {
 
     suspend fun resolve(ctx: Context, link: ParsedLink): Resolved {
         val isPlaylistPlatform = link.platform == Platform.INSTAGRAM
-        val root = YtDlp.json(ctx, link.url.substringBefore('#'), noPlaylist = !isPlaylistPlatform)
+        val cookies = com.gonzalowebdev.mediadownloader.net.Sessions.cookieFile(ctx, link.platform)
+        val root = try {
+            YtDlp.json(ctx, link.url.substringBefore('#'), noPlaylist = !isPlaylistPlatform, cookies = cookies)
+        } finally { cookies?.delete() }
         val items: List<com.google.gson.JsonObject> =
             if (root.str("_type") == "playlist")
                 root.arr("entries")?.mapNotNull { it.takeIf { e -> e.isJsonObject }?.asJsonObject } ?: emptyList()

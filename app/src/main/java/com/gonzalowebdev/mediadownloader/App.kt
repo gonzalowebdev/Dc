@@ -26,6 +26,7 @@ class App : Application() {
         super.onCreate()
         prefs = Prefs(this)
         db = Room.databaseBuilder(this, AppDatabase::class.java, "mdh.db").build()
+        com.gonzalowebdev.mediadownloader.net.Sessions.init(prefs)
         auth = PinterestAuth(prefs)
         api = PinterestApi(auth)
         resolver = Resolver(this, PinterestResolver(api, auth))

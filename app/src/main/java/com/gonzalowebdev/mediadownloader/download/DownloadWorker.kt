@@ -184,6 +184,7 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
         dir.mkdirs()
         var uri: Uri? = null
         var paused = false
+        var cookieFile: File? = null
         try {
             YtDlp.ensure(applicationContext)
             val req = YoutubeDLRequest(url)
@@ -191,6 +192,8 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
             req.addOption("-f", "b[ext=mp4]/bv*[ext=mp4]+ba[ext=m4a]/b/bv*+ba")
             req.addOption("--merge-output-format", "mp4")
             if (idx > 0) req.addOption("--playlist-items", idx.toString()) else req.addOption("--no-playlist")
+            cookieFile = com.gonzalowebdev.mediadownloader.net.Sessions.cookieFile(applicationContext, platform)
+            cookieFile?.let { req.addOption("--cookies", it.absolutePath) }
             req.addOption("--no-mtime")
             req.addOption("--no-part")
             req.addOption("--retries", "3")
@@ -244,6 +247,7 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
             fail(item, dao, YtDlp.friendly(e.message))
         } finally {
             dir.deleteRecursively()
+            cookieFile?.delete()
         }
     }
 
