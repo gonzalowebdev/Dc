@@ -11,23 +11,19 @@ Compilar local: abrir en Android Studio (JDK 17) o `gradle assembleDebug`.
 - **Compartir → Media Downloader Hub** desde Instagram/TikTok/Pinterest.
 - **Pegar** el enlace en Inicio (también sugiere un enlace compatible del portapapeles al abrir la app).
 
-## Conectar Pinterest (necesario para tableros)
-1. Crea una app en https://developers.pinterest.com/apps/ .
-2. En la app registra el redirect URI `mediadownloaderhub://pinterest-callback`.
-3. En la app: Ajustes → Cuentas conectadas → **CONFIGURAR API**: pega App ID y App secret (se guardan cifrados) → **CONECTAR**.
-4. Si tu app tiene acceso *Trial*, activa "Usar API sandbox". Si Pinterest rechaza el redirect con esquema propio, genera un token de acceso en el panel y pégalo en el mismo diálogo.
-
-Scopes solicitados: `boards:read, boards:read_secret, pins:read, pins:read_secret, user_accounts:read`.
-
-## Cómo descarga tableros
-Identifica el tablero entre *tus* tableros (`/v5/boards`, incluye secretos), recorre **todas** las páginas (`page_size=250` + `bookmark`), suma los Pines de cada sección (`/sections/{id}/pins`), verifica cada archivo (HEAD / Range) antes de bajarlo, prueba `originals → 1200x → 600x` y marca el tablero como completo solo si no quedan pendientes ni fallidos. Los fallidos se listan y se reintentan.
+## Cómo descarga (v1.1)
+- **Instagram y TikTok**: usa **yt-dlp** (librería youtubedl-android + ffmpeg, se actualiza sola una vez por día y desde Ajustes → Motor de descargas). Si falla, intenta una lectura directa de la página pública.
+- **Pinterest, sin cuenta**: Pines y tableros públicos (con secciones y paginación completa de 250 en 250) se leen con los mismos endpoints JSON que usa la web. Videos: mp4 directo; si solo hay HLS, usa yt-dlp.
+- **Pinterest con cuenta (opcional, avanzado)**: solo para tableros secretos propios. Registrar el redirect `mediadownloaderhub://pinterest-callback` en una app de developers.pinterest.com, o pegar un token de acceso (Ajustes → Pinterest → Avanzado).
+- Cada archivo se verifica antes de descargarlo; un tablero solo se marca completo si no quedan pendientes ni fallidos; los fallidos se reintentan.
 
 ## Limitaciones (sin funciones ficticias)
-- **Pinterest**: la API oficial solo lee tableros propios. Videos: si la API no da la URL del mp4 se intenta leer la página pública del Pin; los Pines solo-HLS no se pueden descargar. El acceso Trial puede limitar lo que la API devuelve.
-- **Instagram**: no hay API oficial de descarga. Solo se intenta contenido público leyendo la página embed; sin sesión muchas publicaciones no responden. **Stories no soportadas** (exigen sesión y no se piden contraseñas).
-- **TikTok**: sin API oficial de descarga; se intenta contenido público leyendo los datos de la página. El audio de las publicaciones de imágenes no se descarga.
-- Pausar cancela el archivo en curso y lo reinicia al reanudar (no hay reanudación por rangos).
-- Instagram/TikTok pueden cambiar su HTML en cualquier momento y romper la extracción.
+- **Stories de Instagram: no soportadas** (exigen sesión; la app no pide contraseñas).
+- Instagram suele pedir sesión incluso para contenido público: en esos casos la app muestra el motivo y no se puede descargar sin cuenta.
+- Instagram, TikTok y Pinterest cambian sus sistemas seguido; si algo deja de funcionar, actualizar yt-dlp suele arreglarlo.
+- Pinterest puede limitar o bloquear la lectura pública (se reintenta con espera); en tableros enormes puede tardar.
+- Pausar cancela el archivo en curso y lo reinicia al reanudar.
+- El APK pesa más por incluir Python, yt-dlp y ffmpeg.
 
 ## Estado de pruebas
-El código se compila en GitHub Actions. **No se probaron aún** las integraciones con cuentas reales (OAuth, tablero de +100 Pines, secciones, secretos, Instagram, TikTok); hay que probarlas en un dispositivo.
+Compila en GitHub Actions. **No se probó aún con enlaces reales** (OAuth, tableros de +100 Pines, secciones, secretos, Instagram, TikTok): hay que probarlo en un dispositivo.
