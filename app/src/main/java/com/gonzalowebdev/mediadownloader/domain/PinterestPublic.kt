@@ -51,13 +51,16 @@ object PinterestPublic {
         val data = JsonObject().apply { add("options", options); add("context", JsonObject()) }
         var attempt = 0
         while (true) {
-            val url = "$BASE/resource/$name/get/?source_url=${enc(sourceUrl)}&data=${enc(data.toString())}&_=${System.currentTimeMillis()}"
+            val rel = "/resource/$name/get/?source_url=${enc(sourceUrl)}&data=${enc(data.toString())}&_=${System.currentTimeMillis()}"
             val (code, body) = try {
-                withContext(Dispatchers.IO) { call(url, sourceUrl) }
+                if (com.gonzalowebdev.mediadownloader.net.Sessions.has(Platform.PINTEREST))
+                    com.gonzalowebdev.mediadownloader.net.PinterestWeb.fetch(rel, sourceUrl)
+                else withContext(Dispatchers.IO) { call(BASE + rel, sourceUrl) }
             } catch (e: java.io.IOException) {
                 throw ResolveException("Sin conexión con Pinterest: ${e.message}")
             }
             if (code == 429 && attempt < 5) { attempt++; delay(4_000L * attempt); continue }
+            if (code == 0) throw ResolveException("No pude consultar Pinterest desde el navegador integrado: ${body.take(120)}")
             if (code == 404) throw ResolveException("Pinterest no encontró el recurso (HTTP 404): es privado o no existe.")
             if (code == 403 || code == 401) throw ResolveException(
                 if (com.gonzalowebdev.mediadownloader.net.Sessions.has(Platform.PINTEREST))

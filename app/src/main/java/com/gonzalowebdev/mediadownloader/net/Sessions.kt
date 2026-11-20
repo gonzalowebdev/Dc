@@ -30,6 +30,8 @@ object Sessions {
         if (i <= 0) null else it.substring(0, i).trim() to it.substring(i + 1).trim()
     }
 
+    fun pairs(p: Platform): List<Pair<String, String>> = prefs.getSession(p.name)?.let { parse(it) }.orEmpty()
+
     fun save(p: Platform, cookieHeader: String) {
         prefs.setSession(p.name, cookieHeader)
         seed(p)

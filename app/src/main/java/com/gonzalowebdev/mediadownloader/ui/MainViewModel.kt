@@ -87,12 +87,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun refreshSettings() { settings = readSettings() }
 
     fun onSessionChanged() {
+        com.gonzalowebdev.mediadownloader.net.PinterestWeb.reset()
         refreshSettings()
         message = "Sesiones: " + (settings.sessions.joinToString(", ") { Platform.valueOf(it).label }.ifBlank { "ninguna" })
     }
 
     fun logout(p: Platform) {
         Sessions.clear(p)
+        com.gonzalowebdev.mediadownloader.net.PinterestWeb.reset()
         android.webkit.CookieManager.getInstance().removeAllCookies(null)
         refreshSettings()
         message = "Sesión de ${p.label} cerrada"
