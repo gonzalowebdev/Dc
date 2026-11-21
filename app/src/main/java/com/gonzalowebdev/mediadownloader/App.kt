@@ -3,6 +3,7 @@ package com.gonzalowebdev.mediadownloader
 import android.app.Application
 import androidx.room.Room
 import com.gonzalowebdev.mediadownloader.data.AppDatabase
+import com.gonzalowebdev.mediadownloader.data.DiagLog
 import com.gonzalowebdev.mediadownloader.data.Prefs
 import com.gonzalowebdev.mediadownloader.domain.PinterestResolver
 import com.gonzalowebdev.mediadownloader.domain.Resolver
@@ -24,13 +25,19 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        DiagLog.init(this)
+        val prevHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            try { DiagLog.crash(e) } catch (x: Throwable) { /* nada */ }
+            prevHandler?.uncaughtException(t, e)
+        }
         prefs = Prefs(this)
         db = Room.databaseBuilder(this, AppDatabase::class.java, "mdh.db").build()
         com.gonzalowebdev.mediadownloader.net.Sessions.init(prefs)
         com.gonzalowebdev.mediadownloader.net.PinterestWeb.init(this)
         auth = PinterestAuth(prefs)
         api = PinterestApi(auth)
-        resolver = Resolver(this, PinterestResolver(api, auth))
+        resolver = Resolver(this, PinterestResolver(this, api, auth))
         saver = MediaStoreSaver(this)
         repo = Repo(this)
         Notifs.createChannels(this)
@@ -43,7 +50,7 @@ class App : Application() {
                     YtDlp.update(this)
                     prefs.ytdlpLastUpdate = now
                 }
-            } catch (e: Exception) { /* se informa al usar la descarga */ }
+            } catch (e: Throwable) { DiagLog.add("yt-dlp-inicio", e.stackTraceToString().take(500)) }
         }
     }
 }

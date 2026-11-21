@@ -21,7 +21,7 @@ object YtDlp {
             YoutubeDL.getInstance().init(ctx.applicationContext)
             try { FFmpeg.getInstance().init(ctx.applicationContext) } catch (e: Exception) { /* sin ffmpeg */ }
             ready = true
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             throw ResolveException("No se pudo iniciar yt-dlp: ${e.message ?: e.javaClass.simpleName}")
         }
     }
@@ -63,6 +63,8 @@ object YtDlp {
         val err = (msg.lines().lastOrNull { it.contains("ERROR", ignoreCase = true) }?.trim() ?: msg.trim().take(240))
             .substringBefore("; please report").substringBefore(", filling out")
         return when {
+            err.contains("comfortable for some audiences", true) || err.contains("Log in for access", true) ->
+                "TikTok exige iniciar sesión para este video: Ajustes → Cuentas conectadas → TikTok."
             err.contains("no video in this post", true) || err.contains("No video formats", true) ->
                 "yt-dlp no encontró un video en este enlace (puede ser una publicación de imágenes)."
             err.contains("login required", true) || err.contains("rate-limit", true) || err.contains("not available", true) && err.contains("Instagram", true) ->

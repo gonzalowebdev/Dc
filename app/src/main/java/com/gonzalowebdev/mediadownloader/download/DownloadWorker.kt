@@ -165,7 +165,7 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
             uri?.let { saver.abort(it) }
             withContext(NonCancellable) { dao.setStatus(item.id, Status.PENDING) }
             throw e
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             uri?.let { saver.abort(it) }
             fail(item, dao, humanError(e))
         }
@@ -242,7 +242,7 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
             uri?.let { saver.abort(it) }
             withContext(NonCancellable) { dao.setStatus(item.id, Status.PENDING) }
             throw e
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             uri?.let { saver.abort(it) }
             fail(item, dao, YtDlp.friendly(e.message))
         } finally {
@@ -253,11 +253,12 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
 
     private suspend fun fail(item: ItemEntity, dao: AppDao, msg: String) {
         dao.markFailed(item.id, msg, System.currentTimeMillis())
+        com.gonzalowebdev.mediadownloader.data.DiagLog.add("descarga", "${item.platform} ${item.fileName}: $msg")
         failRun.incrementAndGet()
         notifyProgress(dao)
     }
 
-    private fun humanError(e: Exception) = when (e) {
+    private fun humanError(e: Throwable) = when (e) {
         is UnknownHostException -> "Sin conexión a internet"
         else -> e.message ?: e.javaClass.simpleName
     }

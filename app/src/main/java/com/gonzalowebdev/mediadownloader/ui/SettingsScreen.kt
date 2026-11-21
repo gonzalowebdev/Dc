@@ -1,6 +1,9 @@
 package com.gonzalowebdev.mediadownloader.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
+import com.gonzalowebdev.mediadownloader.data.DiagLog
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -87,6 +90,26 @@ fun SettingsScreen(vm: MainViewModel) {
         }
 
         SectionCard {
+            Text("Diagnóstico", fontWeight = FontWeight.SemiBold)
+            Text(
+                "Si algo falla o la app se cierra, copia el informe y envíamelo: trae el error técnico exacto.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = {
+                    ctx.getSystemService(ClipboardManager::class.java)
+                        .setPrimaryClip(ClipData.newPlainText("informe", DiagLog.report()))
+                    vm.message = "Informe copiado"
+                }) { Text("COPIAR") }
+                OutlinedButton(onClick = {
+                    val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, DiagLog.report())
+                    ctx.startActivity(Intent.createChooser(send, "Compartir informe"))
+                }) { Text("COMPARTIR") }
+                TextButton(onClick = { DiagLog.clear(); vm.message = "Informe borrado" }) { Text("BORRAR") }
+            }
+        }
+
+        SectionCard {
             Text("Almacenamiento", fontWeight = FontWeight.SemiBold)
             Text("Download/Media Downloader/{Instagram, TikTok, Pinterest}/", style = MaterialTheme.typography.bodyMedium)
             Text(
@@ -97,7 +120,7 @@ fun SettingsScreen(vm: MainViewModel) {
 
         SectionCard {
             Text("Información", fontWeight = FontWeight.SemiBold)
-            Text("Media Downloader Hub 1.2.0", style = MaterialTheme.typography.bodyMedium)
+            Text("Media Downloader Hub 1.3.0", style = MaterialTheme.typography.bodyMedium)
             Text(
                 "Uso personal. Respeta los términos de cada plataforma y los derechos de autor.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant

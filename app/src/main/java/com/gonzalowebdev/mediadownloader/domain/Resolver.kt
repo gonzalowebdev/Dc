@@ -19,7 +19,11 @@ class Resolver(private val ctx: Context, private val pinterest: PinterestResolve
             when {
                 link.type == LinkType.STORY && !loggedIn ->
                     throw ResolveException("Las Stories requieren iniciar sesión: Ajustes → Cuentas conectadas → Instagram.")
-                link.type == LinkType.STORY -> InstagramApi.resolve(link)
+                link.type == LinkType.STORY -> firstSuccess(
+                    null,
+                    { progress("Consultando Stories…"); InstagramApi.resolve(link) },
+                    { progress("Probando con yt-dlp…"); YtDlpResolver.resolve(ctx, link) }
+                )
                 loggedIn -> firstSuccess(
                     null,
                     { progress("Consultando Instagram…"); InstagramApi.resolve(link) },

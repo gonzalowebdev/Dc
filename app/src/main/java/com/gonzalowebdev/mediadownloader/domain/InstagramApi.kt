@@ -34,6 +34,7 @@ object InstagramApi {
         Net.cookie("https://www.instagram.com", "csrftoken")?.let { b.header("X-CSRFToken", it) }
         Net.client.newCall(b.build()).execute().use { r ->
             val body = r.body?.string().orEmpty()
+            if (!r.isSuccessful) com.gonzalowebdev.mediadownloader.data.DiagLog.add("instagram-http", "${url.substringBefore("?")} HTTP ${r.code} ${body.take(200).replace("\n", " ")}")
             if (r.code == 401 || r.code == 403 || body.contains("login_required"))
                 throw ResolveException("Instagram rechazó la sesión. Cierra sesión y vuelve a iniciarla en Ajustes → Cuentas conectadas.")
             if (r.code == 404) throw ResolveException("Instagram no encontró el contenido (borrado, o privado de una cuenta que no sigues).")

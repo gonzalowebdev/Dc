@@ -7,7 +7,11 @@ import com.google.gson.JsonObject
 import java.net.URLDecoder
 import java.text.Normalizer
 
-class PinterestResolver(private val api: PinterestApi, private val auth: PinterestAuth) {
+class PinterestResolver(
+    private val ctx: android.content.Context,
+    private val api: PinterestApi,
+    private val auth: PinterestAuth
+) {
 
     suspend fun resolve(link0: ParsedLink, progress: (String) -> Unit): Resolved {
         var link = link0
@@ -54,18 +58,57 @@ class PinterestResolver(private val api: PinterestApi, private val auth: Pintere
     }
 
     private suspend fun resolveBoard(orig: ParsedLink, link: ParsedLink, progress: (String) -> Unit): Resolved {
-        progress("Leyendo el tablero (sin iniciar sesión)…")
+        val errors = mutableListOf<String>()
+        progress("Leyendo el tablero…")
         try {
             return resolveBoardPublic(orig, link, progress)
-        } catch (e: ResolveException) {
-            if (!auth.hasToken()) {
-                val hint = if (com.gonzalowebdev.mediadownloader.net.Sessions.has(Platform.PINTEREST)) ""
-                else "\n\nPara tableros inicia sesión en Pinterest: Ajustes → Cuentas conectadas → Pinterest."
-                throw ResolveException("${e.message}$hint")
-            }
-            progress("Probando con tu cuenta conectada…")
-            return resolveBoardApi(orig, link, progress)
+        } catch (e: ResolveException) { errors += e.message.orEmpty() }
+        val session = com.gonzalowebdev.mediadownloader.net.Sessions.has(Platform.PINTEREST)
+        if (session) {
+            progress("Leyendo el tablero desde la página…")
+            try {
+                return resolveBoardPage(orig, link, progress)
+            } catch (e: ResolveException) { errors += e.message.orEmpty() }
         }
+        if (auth.hasToken()) {
+            progress("Probando con la API de Pinterest…")
+            try {
+                return resolveBoardApi(orig, link, progress)
+            } catch (e: ResolveException) { errors += e.message.orEmpty() }
+        }
+        val hint = if (session) "" else "\n\nPara tableros inicia sesión en Pinterest: Ajustes → Cuentas conectadas → Pinterest."
+        throw ResolveException(errors.filter { it.isNotBlank() }.distinct().joinToString("\n\n") + hint)
+    }
+
+    /** Abre el tablero en un navegador visible con tu sesión y lee los Pines de la página. */
+    private suspend fun resolveBoardPage(orig: ParsedLink, link: ParsedLink, progress: (String) -> Unit): Resolved {
+        val user = link.ids.getOrNull(0).orEmpty()
+        val slug = link.ids.getOrNull(1).orEmpty()
+        val section = link.ids.getOrNull(2)
+        val boardUrl = "https://www.pinterest.com/$user/$slug/" + (section?.let { "$it/" } ?: "")
+        val res = com.gonzalowebdev.mediadownloader.net.BoardScrape.run(
+            ctx,
+            com.gonzalowebdev.mediadownloader.net.ScrapeRequest(boardUrl, user, slug, section, link.type == LinkType.BOARD),
+            progress
+        )
+        if (res.pins.isEmpty()) throw ResolveException("No pude leer Pines en la página del tablero (¿cargó bien?).")
+        val size = Regex("/\\d+x\\d*/")
+        val entries = res.pins.map { p ->
+            if (p.video) MediaEntry(
+                p.id, "${p.id}.mp4", listOf("ytdlp:0:https://www.pinterest.com/pin/${p.id}/"),
+                MediaKind.VIDEO, p.src.replace(size, "/736x/")
+            ) else {
+                val big = p.src.replace(size, "/originals/")
+                MediaEntry(
+                    p.id, fileNameFromUrl(big, "${p.id}.jpg"),
+                    listOf(big, p.src.replace(size, "/1200x/"), p.src.replace(size, "/736x/"), p.src).distinct(),
+                    MediaKind.IMAGE, p.src.replace(size, "/736x/")
+                )
+            }
+        }
+        val boardName = URLDecoder.decode(slug, "UTF-8").replace('-', ' ').replaceFirstChar { it.uppercase() }
+        val title = if (section != null) "$boardName · ${URLDecoder.decode(section, "UTF-8").replace('-', ' ')}" else boardName
+        return Resolved(Platform.PINTEREST, link.type, orig.url, title, entries, entries.firstOrNull()?.previewUrl, res.notes)
     }
 
     private suspend fun resolveBoardPublic(orig: ParsedLink, link: ParsedLink, progress: (String) -> Unit): Resolved {

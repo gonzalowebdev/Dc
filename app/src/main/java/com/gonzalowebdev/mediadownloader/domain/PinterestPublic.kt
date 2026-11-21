@@ -60,6 +60,7 @@ object PinterestPublic {
                 throw ResolveException("Sin conexión con Pinterest: ${e.message}")
             }
             if (code == 429 && attempt < 5) { attempt++; delay(4_000L * attempt); continue }
+            if (code !in 200..299) com.gonzalowebdev.mediadownloader.data.DiagLog.add("pinterest-http", "$name HTTP $code ${body.take(200).replace("\n", " ")}")
             if (code == 0) throw ResolveException("No pude consultar Pinterest desde el navegador integrado: ${body.take(120)}")
             if (code == 404) throw ResolveException("Pinterest no encontró el recurso (HTTP 404): es privado o no existe.")
             if (code == 403 || code == 401) throw ResolveException(

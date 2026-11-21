@@ -183,8 +183,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ResolveException) {
+                com.gonzalowebdev.mediadownloader.data.DiagLog.add("analizar", "${link.platform} ${link.type} ${link.url}\n${e.message}")
                 home = HomeState.Failure(e.message ?: "No se pudo analizar el enlace.")
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
+                com.gonzalowebdev.mediadownloader.data.DiagLog.add("analizar-error", "${link.url}\n${e.stackTraceToString().take(800)}")
                 home = HomeState.Failure("Error: ${e.message ?: e.javaClass.simpleName}")
             }
         }
